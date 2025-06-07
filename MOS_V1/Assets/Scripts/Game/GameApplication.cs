@@ -1,18 +1,21 @@
+using DG.Tweening;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class GameApplication : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
+    private void Awake()
     {
-        
+        DOTween.Init();
+        UIManager.Instance.Initialize(); // 初始化UI管理器
     }
 
-    // Update is called once per frame
-    void Update()
+    private void Start()
     {
-        
+        //UIManager.Instance.LoadUIAsync("MainMenu", (ui) =>
+        //{
+        //    ui.OnOpen(); // 打开主菜单UI
+        //});
     }
 }

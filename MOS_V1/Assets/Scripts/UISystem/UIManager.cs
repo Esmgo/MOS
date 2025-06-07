@@ -19,12 +19,16 @@ public class UIManager : Singleton<UIManager>
     private Stack<UIBase> uiStack = new Stack<UIBase>();
 
     // 初始化UI管理器
-    public void Initialize(Transform root)
+    public void Initialize()
     {
-        uiRoot = root;
+        uiRoot = GameObject.Find("UIRoot").transform;
     }
 
-    // 异步加载UI
+    /// <summary>
+    /// 异步加载UI
+    /// </summary>
+    /// <param name="uiName">UI的aa地址</param>
+    /// <param name="onComplete">加载完成回调(可选)</param>
     public void LoadUIAsync(string uiName, UnityAction<UIBase> onComplete = null)
     {
         // 如果已经加载
@@ -164,40 +168,3 @@ public class UIManager : Singleton<UIManager>
     }
 }
 
-// 单例基类
-public class Singleton<T> : MonoBehaviour where T : MonoBehaviour
-{
-    private static T instance;
-
-    public static T Instance
-    {
-        get
-        {
-            if (instance == null)
-            {
-                instance = FindObjectOfType<T>();
-
-                if (instance == null)
-                {
-                    GameObject obj = new GameObject(typeof(T).Name);
-                    instance = obj.AddComponent<T>();
-                }
-            }
-
-            return instance;
-        }
-    }
-
-    protected virtual void Awake()
-    {
-        if (instance == null)
-        {
-            instance = this as T;
-            DontDestroyOnLoad(gameObject);
-        }
-        else
-        {
-            Destroy(gameObject);
-        }
-    }
-}
