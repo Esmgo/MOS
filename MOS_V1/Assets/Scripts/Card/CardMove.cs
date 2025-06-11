@@ -12,13 +12,13 @@ public class CardMove : MonoBehaviour, IDragHandler, IBeginDragHandler, IEndDrag
     [Required] public RectTransform CardTransform;
 
     [TitleGroup("拖动设置"), PropertyOrder(1)]
-    [LabelText("跟随时间"),Range(0, 5)]
+    [LabelText("跟随时间"), Range(0, 5)]
     public float FollowSpeed = 0.2f;
 
     [TitleGroup("旋转设置"), PropertyOrder(2)]
     [Range(0.1f, 2f)]
     public float RotationSensitivity = 1.5f;
-    [Range(5, 45)]
+    [Range(5, 60)]
     public float MaxRotationAngle = 25f;
     [Range(0.01f, 0.5f)]
     public float RotationDuration = 0.15f;
@@ -44,6 +44,9 @@ public class CardMove : MonoBehaviour, IDragHandler, IBeginDragHandler, IEndDrag
     private bool isDragging;
     private float targetRotationZ;
     private int originalSiblingIndex;
+    public CardState cardState = CardState.None;
+    public bool isPointerDown = false;
+    private bool isPointerIn = false;
 
     // Odin提供的缓动类型下拉列表
     private Ease[] GetEaseTypes => new Ease[]
@@ -70,32 +73,70 @@ public class CardMove : MonoBehaviour, IDragHandler, IBeginDragHandler, IEndDrag
     [TitleGroup("状态"), ShowInInspector, ReadOnly]
     private string DragStatus => isDragging ? "正在拖动" : "闲置";
 
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        isPointerIn = true;
+        if (CardManager.Instance.currentCard == null /*|| CardManager.Instance.currentCard == gameObject*/
+           && cardState == CardState.None)
+        {
+            CardManager.Instance.currentCard = gameObject; // 设置当前卡牌
+            SetChecking(); // 鼠标进入时放大并置顶
+            cardState = CardState.Checking;
+        }
+        
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        isPointerIn = false;
+        if (!isPointerDown)
+        {
+            if (cardState == CardState.Checking)
+            {
+                cardState = CardState.None; // 恢复状态为None
+                CardManager.Instance.currentCard = null; // 清除当前卡牌
+                SetUnchecking(); // 鼠标离开时缩小并恢复原位
+                MoveToPos(originalPosition, 0.2f); // 返回原位置
+            }
+        }
+    }
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        isPointerDown = true;
+    }
+
     public void OnPointerUp(PointerEventData eventData)
     {
-        transform.SetSiblingIndex(originalSiblingIndex); // 恢复原始兄弟索引
+        isPointerDown = false;
+        if (cardState != CardState.None)
+        {
+            SetUnchecking();
+            Back(); // 鼠标抬起时返回原位置
+        }
     }
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        moveTween?.Kill();
-        scaleTween?.Kill();
-
-        isDragging = true;
-        lastPosition = CardTransform.position; 
-
+        if(cardState == CardState.Checking && isPointerDown)
+        {
+            isDragging = true;
+            cardState = CardState.Dragging; // 设置状态为Dragging
+        }
     }
 
     public void OnDrag(PointerEventData eventData)
     {
-        // 更新位置
-        MoveToPos(eventData.position, FollowSpeed, Ease.OutQuad);
+        if (isDragging)
+        {
+            // 更新位置
+            MoveToPos(eventData.position, FollowSpeed, Ease.OutQuad);
+        }
     }
 
     public void OnEndDrag(PointerEventData eventData)
     {
         isDragging = false;
-        // 返回原位置
-        MoveToPos(originalPosition, ReturnDuration, ReturnEase);
     }
 
     /// <summary>
@@ -104,12 +145,16 @@ public class CardMove : MonoBehaviour, IDragHandler, IBeginDragHandler, IEndDrag
     /// <param name="aimPOs">位置</param>
     /// <param name="time">时间</param>
     /// <param name="ease">动画曲线</param>
-    public void MoveToPos(Vector3 aimPOs, float time, Ease ease = Ease.Flash)
+    public void MoveToPos(Vector3 aimPOs, float time, Ease ease = Ease.Flash, System.Action onComplete = null)
     {
         moveTween?.Kill();
         moveTween = transform.DOMove(aimPOs, time)
             .SetEase(ease)
-            .OnComplete(() => moveTween = null);
+            .OnComplete(() =>
+            {
+                onComplete?.Invoke();
+                moveTween = null;
+            });
     }
 
     public void SetOriginalPosition(Vector3 originalPosition)
@@ -122,6 +167,47 @@ public class CardMove : MonoBehaviour, IDragHandler, IBeginDragHandler, IEndDrag
     {
         originalSiblingIndex = siblingIndex;
         transform.SetSiblingIndex(originalSiblingIndex);
+    }
+
+    private void SetChecking()
+    {
+        transform.DOMove(new Vector3(transform.position.x, transform.position.y+30, transform.position.z), ScaleDuration);
+        transform.SetAsLastSibling(); // 确保卡牌在最上层
+        scaleTween?.Kill();
+        scaleTween = CardTransform.DOScale(HoverScale, ScaleDuration)
+            .SetEase(Ease.OutQuad)
+            .OnComplete(() => scaleTween = null);
+    }
+
+    private void SetUnchecking()
+    {
+        transform.SetSiblingIndex(originalSiblingIndex); // 恢复原始兄弟索引
+        scaleTween?.Kill();
+        scaleTween = CardTransform.DOScale(1f, ScaleDuration)
+            .SetEase(Ease.OutQuad)
+            .OnComplete(() => scaleTween = null);
+    }
+
+    private void Back()
+    {
+        cardState = CardState.Backing;
+        if (CardManager.Instance.currentCard == gameObject)
+        {
+            CardManager.Instance.currentCard = null; // 清除当前卡牌
+            MoveToPos(originalPosition, ReturnDuration, ReturnEase, () =>
+            {
+                if (isPointerIn)
+                {
+                    CardManager.Instance.currentCard = gameObject; // 设置当前卡牌
+                    SetChecking(); // 鼠标进入时放大并置顶
+                    cardState = CardState.Checking;
+                }
+                else
+                {
+                    cardState = CardState.None; // 恢复状态为None
+                }
+            });
+        }
     }
 
     private void ApplyCardRotation()
@@ -147,18 +233,12 @@ public class CardMove : MonoBehaviour, IDragHandler, IBeginDragHandler, IEndDrag
         scaleTween?.Kill();
     }
 
-    public void OnPointerDown(PointerEventData eventData)
+    public enum CardState
     {
-        
-    }
-
-    public void OnPointerEnter(PointerEventData eventData)
-    {
-        transform.SetAsLastSibling(); // 确保卡牌在最上层
-    }
-
-    public void OnPointerExit(PointerEventData eventData)
-    {
-        
+        None,
+        Dragging,
+        Checking,
+        Backing,
+        Used
     }
 }
