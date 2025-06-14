@@ -13,9 +13,9 @@ public class GameApplication : MonoBehaviour
 
     private void Start()
     {
-        //UIManager.Instance.LoadUIAsync("MainMenu", (ui) =>
-        //{
-        //    ui.OnOpen(); // 打开主菜单UI
-        //});
+        UIManager.Instance.LoadUIAsync("Desktop", (ui) =>
+        {
+            ui.OnOpen(); // 打开主菜单UI
+        });
     }
 }
